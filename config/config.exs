@@ -5,4 +5,3 @@ config :xai_bot,
   socks5_proxy: "localhost:1080",
   data_dir: Path.expand("data", __DIR__ |> Path.dirname())
 
-import_config "#{config_env()}.exs"
