@@ -1,11 +1,12 @@
 defmodule XaiBot.Summary do
   @moduledoc """
-  Translates digest messages and generates a Russian-language summary via YandexGPT.
+  Generates a Russian-language summary of the digest via OpenRouter (DeepSeek V3.2).
   """
 
   require Logger
 
-  @api_url "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+  @api_url "https://openrouter.ai/api/v1/chat/completions"
+  @model "deepseek/deepseek-v3.2"
 
   @summary_prompt """
   Ты — редактор AI-новостного Telegram-канала. Тебе дают дайджест новостей за последние часы, \
@@ -18,9 +19,9 @@ defmodule XaiBot.Summary do
   """
 
   def generate(digest) when is_map(digest) do
-    with {:ok, api_key, folder_id} <- get_config(),
+    with {:ok, api_key} <- get_config(),
          content when not is_nil(content) <- build_prompt_content(digest) do
-      call_llm(api_key, folder_id, @summary_prompt, content, 0.3)
+      call_llm(api_key, @summary_prompt, content, 0.3)
     else
       nil ->
         Logger.info("No items for summary")
@@ -32,14 +33,13 @@ defmodule XaiBot.Summary do
   end
 
   defp get_config do
-    api_key = Application.get_env(:xai_bot, :yc_llm_api_key)
-    folder_id = Application.get_env(:xai_bot, :yc_folder_id)
+    api_key = Application.get_env(:xai_bot, :openrouter_api_key)
 
-    if is_nil(api_key) || api_key == "" || is_nil(folder_id) || folder_id == "" do
-      Logger.warning("YandexGPT not configured")
+    if is_nil(api_key) || api_key == "" do
+      Logger.warning("OpenRouter not configured")
       {:error, :not_configured}
     else
-      {:ok, api_key, folder_id}
+      {:ok, api_key}
     end
   end
 
@@ -61,26 +61,31 @@ defmodule XaiBot.Summary do
     if sections == "", do: nil, else: sections
   end
 
-  defp call_llm(api_key, folder_id, system_prompt, content, temperature) do
+  defp call_llm(api_key, system_prompt, content, temperature) do
     body = %{
-      modelUri: "gpt://#{folder_id}/yandexgpt-lite/latest",
-      completionOptions: %{temperature: temperature, stream: false},
+      model: @model,
+      temperature: temperature,
       messages: [
-        %{role: "system", text: system_prompt},
-        %{role: "user", text: content}
+        %{role: "system", content: system_prompt},
+        %{role: "user", content: content}
       ]
     }
 
-    case Req.post(url: @api_url, json: body, headers: [{"Authorization", "Bearer #{api_key}"}], receive_timeout: 60_000) do
-      {:ok, %{status: 200, body: %{"result" => %{"alternatives" => [%{"message" => %{"text" => text}} | _]}}}} ->
+    case Req.post(
+           url: @api_url,
+           json: body,
+           headers: [{"Authorization", "Bearer #{api_key}"}],
+           receive_timeout: 60_000
+         ) do
+      {:ok, %{status: 200, body: %{"choices" => [%{"message" => %{"content" => text}} | _]}}} ->
         {:ok, strip_code_fences(text)}
 
       {:ok, %{status: status, body: body}} ->
-        Logger.error("YandexGPT error: #{status} #{inspect(body)}")
+        Logger.error("OpenRouter error: #{status} #{inspect(body)}")
         {:error, {:llm_error, status}}
 
       {:error, reason} ->
-        Logger.error("YandexGPT request failed: #{inspect(reason)}")
+        Logger.error("OpenRouter request failed: #{inspect(reason)}")
         {:error, reason}
     end
   end

@@ -18,16 +18,23 @@ defmodule XaiBot.Scheduler do
 
   @impl true
   def init(_opts) do
-    Logger.info("Scheduler started, scheduling first tick")
-    schedule_tick()
-    {:ok, %{task_ref: nil}}
+    Logger.info("Scheduler started, checking every minute")
+    schedule_check()
+    {:ok, %{task_ref: nil, last_run_hour: nil}}
   end
 
   @impl true
-  def handle_info(:tick, state) do
-    Logger.info("Tick! Running news pipeline")
-    state = run_pipeline(state)
-    schedule_tick()
+  def handle_info(:check, state) do
+    state =
+      if time_to_run?() and DateTime.utc_now().hour != state.last_run_hour do
+        Logger.info("Tick! Running news pipeline")
+        state = run_pipeline(state)
+        %{state | last_run_hour: DateTime.utc_now().hour}
+      else
+        state
+      end
+
+    schedule_check()
     {:noreply, state}
   end
 
@@ -103,17 +110,12 @@ defmodule XaiBot.Scheduler do
          digest = XaiBot.Digest.build(new_items),
          messages when messages != [] <- XaiBot.Digest.format(digest),
          messages do
-      case send_all(messages) do
-        :ok ->
-          send_summary(digest)
-          ids = Enum.map(new_items, & &1.id)
-          XaiBot.Dedup.mark_seen(ids)
-          Logger.info("Published digest with #{length(new_items)} items in #{length(messages)} messages")
-          :ok
-
-        {:error, _} = err ->
-          err
-      end
+      send_all(messages)
+      send_summary(digest)
+      ids = Enum.map(new_items, & &1.id)
+      XaiBot.Dedup.mark_seen(ids)
+      Logger.info("Published digest with #{length(new_items)} items in #{length(messages)} messages")
+      :ok
     else
       [] ->
         Logger.info("No new items to publish")
@@ -129,10 +131,8 @@ defmodule XaiBot.Scheduler do
       {:ok, text} ->
         summary_msg = "🧠 <b>Сводка</b>\n\n#{text}"
 
-        case XaiBot.Telegram.send_message(summary_msg) do
-          :ok -> Logger.info("Summary sent")
-          {:error, reason} -> Logger.warning("Failed to send summary: #{inspect(reason)}")
-        end
+        XaiBot.Telegram.send_message(summary_msg)
+        Logger.info("Summary sent")
 
       {:error, reason} ->
         Logger.warning("Summary generation skipped: #{inspect(reason)}")
@@ -140,12 +140,8 @@ defmodule XaiBot.Scheduler do
   end
 
   defp send_all(messages) do
-    Enum.reduce_while(messages, :ok, fn msg, _acc ->
-      case XaiBot.Telegram.send_message(msg) do
-        :ok -> {:cont, :ok}
-        {:error, _} = err -> {:halt, err}
-      end
-    end)
+    Enum.each(messages, &XaiBot.Telegram.send_message/1)
+    :ok
   end
 
   defp filter_recent(items) do
@@ -163,29 +159,15 @@ defmodule XaiBot.Scheduler do
     Enum.reject(items, fn item -> XaiBot.Dedup.seen?(item.id) end)
   end
 
-  defp schedule_tick do
-    delay = ms_until_next_tick()
-    Process.send_after(self(), :tick, delay)
-    Logger.info("Next tick in #{div(delay, 60_000)} minutes")
+  @check_interval :timer.seconds(60)
+
+  defp schedule_check do
+    Process.send_after(self(), :check, @check_interval)
   end
 
-  defp ms_until_next_tick do
-    hours = Application.get_env(:xai_bot, :schedule_hours, [9, 21])
+  defp time_to_run? do
+    hours = Application.get_env(:xai_bot, :schedule_hours, [6, 18])
     now = DateTime.utc_now()
-    current_seconds = now.hour * 3600 + now.minute * 60 + now.second
-
-    target_seconds =
-      hours
-      |> Enum.map(&(&1 * 3600))
-      |> Enum.sort()
-
-    next =
-      Enum.find(target_seconds, fn t -> t > current_seconds end) ||
-        hd(target_seconds) + 86_400
-
-    diff_seconds = next - current_seconds
-    diff_seconds = if diff_seconds <= 0, do: diff_seconds + 86_400, else: diff_seconds
-
-    diff_seconds * 1000
+    now.hour in hours and now.minute < 2
   end
 end

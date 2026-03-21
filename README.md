@@ -10,7 +10,7 @@ Telegram-бот для агрегации AI-новостей. Собирает 
 - Дедупликация опубликованных записей (DETS, TTL 14 дней)
 - Автоматическое решение Anubis anti-bot challenge
 - Публикация каждой категории отдельным сообщением
-- AI-сводка ключевых событий на русском через YandexGPT Lite
+- AI-сводка ключевых событий на русском через DeepSeek V3.2 (OpenRouter)
 - Retry с экспоненциальным backoff при ошибках
 - Расписание: 2 дайджеста в день (настраивается)
 
@@ -19,7 +19,7 @@ Telegram-бот для агрегации AI-новостей. Собирает 
 ```
 Feed → Digest → Telegram → Summary
  │        │         │          │
- │        │         │          └─ AI-сводка на русском (YandexGPT Lite)
+ │        │         │          └─ AI-сводка на русском (DeepSeek V3.2)
  │        │         └─ Отправка сообщений через Bot API
  │        └─ Фильтрация, категоризация, форматирование
  └─ RSS-фид + Anubis auto-solve
@@ -29,7 +29,7 @@ Feed → Digest → Telegram → Summary
 |--------|-----------|
 | `Feed` | Загрузка и парсинг RSS, конвертация в структуры |
 | `Digest` | Фильтрация шума, категоризация, HTML-форматирование |
-| `Summary` | Генерация сводки на русском через YandexGPT Lite |
+| `Summary` | Генерация сводки на русском через DeepSeek V3.2 (OpenRouter) |
 | `Telegram` | Отправка сообщений, split по лимиту 4096 байт |
 | `Scheduler` | Периодический запуск pipeline, retry |
 | `Dedup` | DETS-хранилище опубликованных ID с TTL |
@@ -51,8 +51,10 @@ export NITTER_BASE_URL="https://your-nitter-instance.com"
 export TWITTER_LIST_ID="your_list_id"
 export TELEGRAM_BOT_TOKEN="your_bot_token"
 export TELEGRAM_CHAT_ID="@your_channel"
-export YC_LLM_API_KEY="your_yandex_llm_api_key"
-export YC_FOLDER_ID="your_yandex_cloud_folder_id"
+export OPENROUTER_API_KEY="your_openrouter_api_key"
+# Опционально: дополнительный канал/топик
+export TELEGRAM_CHAT_ID_2="-100..."
+export TELEGRAM_THREAD_ID_2="51"
 ```
 
 ## Запуск
@@ -83,7 +85,6 @@ mix test
 | `TWITTER_LIST_ID` | `.env` | ID Twitter-списка |
 | `TELEGRAM_BOT_TOKEN` | `.env` | Токен Telegram-бота |
 | `TELEGRAM_CHAT_ID` | `.env` | ID канала или `@username` |
-| `YC_LLM_API_KEY` | `.env` | API-ключ YandexGPT (опционально) |
-| `YC_FOLDER_ID` | `.env` | ID каталога Yandex Cloud (опционально) |
+| `OPENROUTER_API_KEY` | `.env` | API-ключ OpenRouter (опционально) |
 | `schedule_hours` | `config.exs` | Часы запуска (UTC), по умолчанию `[6, 18]` |
 | `socks5_proxy` | `config.exs` | SOCKS5-прокси для запросов |
