@@ -19,7 +19,8 @@ if config_env() == :prod do
       System.get_env("TELEGRAM_BOT_TOKEN") || raise("TELEGRAM_BOT_TOKEN is required"),
     telegram_destinations: build_destinations.(),
     telegram_proxy: System.get_env("TELEGRAM_PROXY"),
-    openrouter_api_key: System.get_env("OPENROUTER_API_KEY")
+    openrouter_api_key: System.get_env("OPENROUTER_API_KEY"),
+    telegraph_token: System.get_env("TELEGRAPH_TOKEN")
 end
 
 if config_env() == :dev do
@@ -29,5 +30,6 @@ if config_env() == :dev do
     telegram_bot_token: System.get_env("TELEGRAM_BOT_TOKEN", ""),
     telegram_destinations: build_destinations.(),
     telegram_proxy: System.get_env("TELEGRAM_PROXY"),
-    openrouter_api_key: System.get_env("OPENROUTER_API_KEY")
+    openrouter_api_key: System.get_env("OPENROUTER_API_KEY"),
+    telegraph_token: System.get_env("TELEGRAPH_TOKEN")
 end

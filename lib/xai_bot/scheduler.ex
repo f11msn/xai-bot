@@ -108,13 +108,11 @@ defmodule XaiBot.Scheduler do
          recent_items = filter_recent(items),
          new_items = reject_seen(recent_items),
          digest = XaiBot.Digest.build(new_items),
-         messages when messages != [] <- XaiBot.Digest.format(digest),
-         messages do
-      send_all(messages)
-      send_summary(digest)
-      ids = Enum.map(new_items, & &1.id)
-      XaiBot.Dedup.mark_seen(ids)
-      Logger.info("Published digest with #{length(new_items)} items in #{length(messages)} messages")
+         messages when messages != [] <- XaiBot.Digest.format(digest) do
+      telegraph_url = publish_telegraph(messages)
+      publish_summary(digest, telegraph_url)
+      XaiBot.Dedup.mark_seen(Enum.map(new_items, & &1.id))
+      Logger.info("Published digest with #{length(new_items)} items")
       :ok
     else
       [] ->
@@ -126,13 +124,32 @@ defmodule XaiBot.Scheduler do
     end
   end
 
-  defp send_summary(digest) do
+  defp publish_telegraph(messages) do
+    case XaiBot.Telegraph.publish(messages) do
+      {:ok, url} ->
+        Logger.info("Telegraph page created: #{url}")
+        url
+
+      {:error, reason} ->
+        Logger.warning("Telegraph failed: #{inspect(reason)}")
+        nil
+    end
+  end
+
+  defp publish_summary(digest, telegraph_url) do
     case XaiBot.Summary.generate(digest) do
       {:ok, text} ->
         [first | rest] = String.split(text, "\n", parts: 2)
-        summary_msg = "<b>#{first}</b>\n#{Enum.join(rest)}"
+        summary = "<b>#{first}</b>\n#{Enum.join(rest)}"
 
-        XaiBot.Telegram.send_message(summary_msg)
+        msg =
+          if telegraph_url do
+            "#{summary}\n\n📰 <a href=\"#{telegraph_url}\">Подробности</a>"
+          else
+            summary
+          end
+
+        XaiBot.Telegram.send_message(msg)
         Logger.info("Summary sent")
 
       {:error, reason} ->
