@@ -32,7 +32,10 @@ defmodule XaiBot.Digest do
       retweet?(item) or
         too_short?(item) or
         marketing?(item) or
-        hiring?(item)
+        hiring?(item) or
+        thread_tail?(item) or
+        emoji_only?(item) or
+        lifestyle?(item)
     end)
   end
 
@@ -40,6 +43,18 @@ defmodule XaiBot.Digest do
   defp too_short?(%{text: text}), do: String.length(text) < 30
   defp marketing?(%{text: text}), do: text =~ ~r/join us|sign up|discount|promo code/i
   defp hiring?(%{text: text}), do: text =~ ~r/we're hiring|job opening|apply now|careers/i
+
+  defp thread_tail?(%{text: text}) do
+    text |> String.split("\n") |> hd() =~ ~r/^(🔗\s*)?(Explore the full|Key value:|Key highlights:)/i
+  end
+
+  defp emoji_only?(%{text: text}) do
+    text |> String.split("\n") |> hd() |> String.replace(~r/[\p{So}\p{Sk}\s]+/u, "") == ""
+  end
+
+  defp lifestyle?(%{text: text}) do
+    text |> String.split("\n") |> hd() =~ ~r/^❤️|^Photo taken at/i
+  end
 
   defp categorize(item) do
     cond do
