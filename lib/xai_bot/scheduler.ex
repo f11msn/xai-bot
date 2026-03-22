@@ -129,7 +129,8 @@ defmodule XaiBot.Scheduler do
   defp send_summary(digest) do
     case XaiBot.Summary.generate(digest) do
       {:ok, text} ->
-        summary_msg = "🧠 <b>Сводка</b>\n\n#{text}"
+        [first | rest] = String.split(text, "\n", parts: 2)
+        summary_msg = "<b>#{first}</b>\n#{Enum.join(rest)}"
 
         XaiBot.Telegram.send_message(summary_msg)
         Logger.info("Summary sent")
